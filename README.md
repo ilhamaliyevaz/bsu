@@ -14,19 +14,19 @@ BSU Chat - Bakı Dövlət Universitetinin tələbələri üçün xüsusi olaraq 
 - ✅ **Yoxlama sistemı** - Qeydiyyat zamanı 3 sualdan minimum 2-ni doğru cavablandırma tələbi
 - ✅ **16 Fakültə Chat Otağı** - Hər fakültə üçün ayrıca söhbət otağı
 - ✅ **Şəxsi mesajlaşma** - İstifadəçilər arasında birbaşa söhbət
-- ✅ **Profil şəkli** - İstifadəçilər öz profil şəkillərini yükləyə bilərlər
+- ✅ **Profil şəkli yükləmə** - Birbaşa şəkil faylı yükləmə (base64 format, max 2MB)
 - ✅ **Bloklama sistemi** - Arzuolunmaz istifadəçiləri bloklama
 - ✅ **Şikayət sistemi** - Qaydaları pozanlara qarşı şikayət
-- ✅ **Real-vaxt yeniləmə** - Mesajlar avtomatik yenilənir (2 saniyədə bir polling)
+- ✅ **Real-vaxt yeniləmə** - Mesajlar avtomatik yenilənir (mesaj yazarkən input field toxunulmur)
 - ✅ **72 saatlıq avtomatik silinmə** - Mesajlar 72 saat sonra avtomatik silinir
 
 ### 🛡️ Admin Paneli
-- ✅ **Təhlükəli hesablar** - 16+ şikayət alan istifadəçilərin idarə edilməsi
+- ✅ **Təhlükəli hesablar** - 16+ şikayət alan istifadəçilərin email, telefon və şikayət səbəbləri ilə birlikdə görünməsi
 - ✅ **Ban sistemi** - İstifadəçiləri ban etmə/ban-ı götürmə
-- ✅ **Filtr sözləri** - Qadağan edilmiş sözlərin idarə edilməsi
+- ✅ **Filtr sözləri** - Qadağan edilmiş sözlərin idarə edilməsi və avtomatik filtrləmə
 - ✅ **Qaydalar** - Sayt qaydalarının redaktə edilməsi
-- ✅ **Günün mövzusu** - Gündəlik mövzunun təyin edilməsi
-- ✅ **İstifadəçi siyahısı** - Bütün qeydiyyatdan keçmiş istifadəçilərin görünməsi
+- ✅ **Günün mövzusu** - Gündəlik mövzunun təyin edilməsi (bütün chat otaqlarında göstərilir)
+- ✅ **İstifadəçi siyahısı** - Bütün qeydiyyatlı istifadəçilərin email və telefon nömrələri ilə birlikdə görünməsi
 
 ## 🗄️ Məlumat Arxitekturası
 
@@ -89,8 +89,9 @@ BSU Chat - Bakı Dövlət Universitetinin tələbələri üçün xüsusi olaraq 
 
 ### Profil
 1. Profil ikonuna basın
-2. Profil şəkli URL-i daxil edin
+2. "Choose File" düyməsi ilə şəkil seçin (max 2MB)
 3. "Şəkli yenilə" düyməsinə basın
+4. Şəkil base64 formatında verilənlər bazasında saxlanılır
 
 ## 🔧 Admin Paneli
 
