@@ -270,15 +270,34 @@ async function adminLogin() {
     const username = document.getElementById('admin_username').value;
     const password = document.getElementById('admin_password').value;
     
-    const result = await apiCall('/api/auth/admin-login', 'POST', { username, password });
+    // First check if it's super admin
+    if (username === 'ursamajor' && password === 'ursa618') {
+        const result = await apiCall('/api/auth/admin-login', 'POST', { username, password });
+        
+        if (!result.error) {
+            currentUser = result.admin;
+            showAdminPanel();
+            return;
+        }
+    }
+    
+    // Otherwise, try to login as regular admin with email
+    const result = await apiCall('/api/auth/login', 'POST', { 
+        email: username + '@bsu.edu.az', 
+        password 
+    });
     
     if (result.error) {
         alert('Yanlış məlumatlar!');
         return;
     }
     
-    currentUser = result.admin;
-    showAdminPanel();
+    if (result.user.is_admin) {
+        currentUser = result.user;
+        showAdminPanel();
+    } else {
+        alert('Bu hesab admin deyil!');
+    }
 }
 
 // ==================== FACULTY LIST ====================
@@ -405,11 +424,19 @@ async function renderFacultyChat() {
 
 function renderMessage(message) {
     const isMine = message.sender_id === currentUser.id;
-    const time = new Date(message.created_at).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' });
+    
+    // Convert to Baku timezone (UTC+4)
+    const messageDate = new Date(message.created_at);
+    const bakuTime = new Date(messageDate.getTime() + (4 * 60 * 60 * 1000)); // Add 4 hours for UTC+4
+    const time = bakuTime.toLocaleTimeString('az-AZ', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Asia/Baku'
+    });
     
     if (isMine) {
         return `
-            <div class="flex justify-end">
+            <div class="flex justify-end mb-2">
                 <div class="message-bubble message-sent px-4 py-2">
                     <p class="text-sm">${message.message}</p>
                     <p class="text-xs opacity-75 mt-1">${time}</p>
@@ -418,14 +445,14 @@ function renderMessage(message) {
         `;
     } else {
         return `
-            <div class="flex items-start space-x-2">
+            <div class="flex items-start space-x-2 mb-2">
                 ${message.profile_image ? 
                     `<img src="${message.profile_image}" class="w-8 h-8 rounded-full object-cover">` :
-                    `<div class="w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">
+                    `<div class="w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs flex-shrink-0">
                         ${message.full_name.charAt(0)}
                     </div>`
                 }
-                <div>
+                <div class="flex-1 min-w-0">
                     <div class="flex items-center space-x-2 mb-1">
                         <p class="text-xs font-semibold text-gray-700">${message.full_name}</p>
                         <button onclick="openUserActions(${message.sender_id}, '${message.full_name.replace(/'/g, "\\'")}', '${message.profile_image || ''}')" 
@@ -507,7 +534,7 @@ function startMessagePolling() {
         if (inputAfter && currentInputValue) {
             inputAfter.value = currentInputValue;
         }
-    }, 2000);
+    }, 5000); // Changed from 2000ms to 5000ms for better performance
 }
 
 // ==================== USER ACTIONS ====================
@@ -842,7 +869,7 @@ async function showAdminPanel() {
                     </button>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <button onclick="showAdminDailyTopic()" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition text-left">
                         <i class="fas fa-star text-3xl text-yellow-600 mb-2"></i>
                         <h3 class="font-bold text-lg">Günün Mövzusu</h3>
@@ -854,10 +881,117 @@ async function showAdminPanel() {
                         <h3 class="font-bold text-lg">Bütün İstifadəçilər</h3>
                         <p class="text-gray-600 text-sm">İstifadəçi siyahısı</p>
                     </button>
+                    
+                    <button onclick="showAdminManagement()" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition text-left">
+                        <i class="fas fa-user-shield text-3xl text-indigo-600 mb-2"></i>
+                        <h3 class="font-bold text-lg">Admin İdarəetməsi</h3>
+                        <p class="text-gray-600 text-sm">Admin yarat və idarə et</p>
+                    </button>
                 </div>
             </div>
         </div>
     `;
+}
+
+async function showAdminManagement() {
+    const adminsData = await apiCall('/api/admin/admins');
+    
+    const app = document.getElementById('app');
+    app.innerHTML = `
+        <div class="min-h-screen bg-gray-50">
+            <div class="bg-indigo-600 text-white p-4 shadow-lg">
+                <div class="flex items-center">
+                    <button onclick="showAdminPanel()" class="mr-4 hover:bg-indigo-700 p-2 rounded">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h2 class="font-bold text-lg">Admin İdarəetməsi</h2>
+                </div>
+            </div>
+            
+            <div class="max-w-4xl mx-auto p-6">
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                    <h3 class="font-bold text-xl mb-4">Yeni Admin Yarat</h3>
+                    <div class="space-y-3">
+                        <input type="text" id="admin-username" placeholder="İstifadəçi adı" 
+                               class="w-full px-4 py-2 rounded border border-gray-300 focus:border-indigo-500 focus:outline-none">
+                        <input type="email" id="admin-email" placeholder="Email (admin@bsu.edu.az)" 
+                               class="w-full px-4 py-2 rounded border border-gray-300 focus:border-indigo-500 focus:outline-none">
+                        <input type="password" id="admin-password" placeholder="Şifrə" 
+                               class="w-full px-4 py-2 rounded border border-gray-300 focus:border-indigo-500 focus:outline-none">
+                        <button onclick="createNewAdmin()" 
+                                class="w-full bg-indigo-600 text-white py-3 rounded hover:bg-indigo-700">
+                            <i class="fas fa-plus mr-2"></i>Admin Yarat
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="font-bold text-xl mb-4">Mövcud Adminlər</h3>
+                    ${adminsData.admins.length === 0 ? `
+                        <p class="text-gray-500 text-center py-6">Heç bir admin yoxdur</p>
+                    ` : `
+                        <div class="space-y-3">
+                            ${adminsData.admins.map(admin => `
+                                <div class="flex justify-between items-center p-4 bg-gray-50 rounded">
+                                    <div>
+                                        <p class="font-semibold">${admin.full_name}</p>
+                                        <p class="text-sm text-gray-600">${admin.email}</p>
+                                        <p class="text-xs text-gray-500">Yaradılıb: ${new Date(admin.created_at).toLocaleDateString('az-AZ')}</p>
+                                    </div>
+                                    ${admin.id !== 1 ? `
+                                        <button onclick="deactivateAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" 
+                                                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                                            <i class="fas fa-user-slash mr-2"></i>Deaktiv et
+                                        </button>
+                                    ` : `
+                                        <span class="text-green-600 font-semibold">Super Admin</span>
+                                    `}
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function createNewAdmin() {
+    const username = document.getElementById('admin-username').value.trim();
+    const email = document.getElementById('admin-email').value.trim();
+    const password = document.getElementById('admin-password').value.trim();
+    
+    if (!username || !email || !password) {
+        alert('Bütün xanaları doldurun!');
+        return;
+    }
+    
+    if (!email.endsWith('@bsu.edu.az')) {
+        alert('Email @bsu.edu.az ilə bitməlidir!');
+        return;
+    }
+    
+    const result = await apiCall('/api/admin/create-admin', 'POST', {
+        username,
+        email,
+        password
+    });
+    
+    if (result.error) {
+        alert(result.error);
+        return;
+    }
+    
+    alert('Yeni admin uğurla yaradıldı!');
+    showAdminManagement();
+}
+
+async function deactivateAdmin(adminId, adminName) {
+    if (!confirm(`${adminName} adlı admini deaktiv etmək istədiyinizdən əminsiniz?`)) return;
+    
+    await apiCall(`/api/admin/users/${adminId}/deactivate`, 'POST');
+    alert('Admin deaktiv edildi!');
+    showAdminManagement();
 }
 
 async function showFlaggedUsers() {
@@ -1137,6 +1271,7 @@ async function showAllUsers() {
                                 <th class="px-4 py-3 text-left">Fakültə</th>
                                 <th class="px-4 py-3 text-left">Kurs</th>
                                 <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">Əməliyyatlar</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1153,6 +1288,12 @@ async function showAllUsers() {
                                             '<span class="text-green-600 font-semibold">Aktiv</span>'
                                         }
                                     </td>
+                                    <td class="px-4 py-3">
+                                        <button onclick="deactivateUser(${user.id}, '${user.full_name.replace(/'/g, "\\'")}')" 
+                                                class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                            Deaktiv et
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -1161,6 +1302,14 @@ async function showAllUsers() {
             </div>
         </div>
     `;
+}
+
+async function deactivateUser(userId, userName) {
+    if (!confirm(`${userName} adlı istifadəçini deaktiv etmək istədiyinizdən əminsiniz? Bu əməliyyat geri alına bilməz və istifadəçinin bütün məlumatları silinəcək.`)) return;
+    
+    await apiCall(`/api/admin/users/${userId}/deactivate`, 'POST');
+    alert('İstifadəçi deaktiv edildi və sistemdən silindi!');
+    showAllUsers();
 }
 
 // ==================== LOGOUT ====================

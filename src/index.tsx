@@ -612,10 +612,66 @@ app.post('/api/admin/daily-topic', async (c) => {
 // Get all users (admin only)
 app.get('/api/admin/users', async (c) => {
   try {
-    const users = await c.env.DB.prepare('SELECT id, email, phone, full_name, faculty, course, is_banned FROM users ORDER BY created_at DESC').all()
+    const users = await c.env.DB.prepare('SELECT id, email, phone, full_name, faculty, course, is_banned, is_admin FROM users ORDER BY created_at DESC').all()
     return c.json({ users: users.results })
   } catch (error) {
     return c.json({ error: 'Failed to fetch users' }, 500)
+  }
+})
+
+// Deactivate user (admin only)
+app.post('/api/admin/users/:id/deactivate', async (c) => {
+  try {
+    const userId = c.req.param('id')
+    
+    // Delete user's messages
+    await c.env.DB.prepare('DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?').bind(userId, userId).run()
+    
+    // Delete user's blocks
+    await c.env.DB.prepare('DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?').bind(userId, userId).run()
+    
+    // Delete user's reports
+    await c.env.DB.prepare('DELETE FROM reports WHERE reporter_id = ? OR reported_id = ?').bind(userId, userId).run()
+    
+    // Delete user
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run()
+    
+    return c.json({ success: true })
+  } catch (error) {
+    return c.json({ error: 'Failed to deactivate user' }, 500)
+  }
+})
+
+// Create admin (super admin only)
+app.post('/api/admin/create-admin', async (c) => {
+  try {
+    const { username, password, email } = await c.req.json()
+    
+    // Hash password
+    const hashedPassword = hashPassword(password)
+    
+    // Create admin user
+    const result = await c.env.DB.prepare(
+      `INSERT INTO users (email, phone, password, full_name, faculty, course, is_admin) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(email, '+9940000000000', hashedPassword, username, 'Admin', 0, 1).run()
+    
+    return c.json({ 
+      success: true, 
+      adminId: result.meta.last_row_id 
+    })
+  } catch (error) {
+    return c.json({ error: 'Failed to create admin' }, 500)
+  }
+})
+
+// Get all admins (super admin only)
+app.get('/api/admin/admins', async (c) => {
+  try {
+    const admins = await c.env.DB.prepare('SELECT id, email, full_name, created_at FROM users WHERE is_admin = 1 ORDER BY created_at DESC').all()
+    return c.json({ admins: admins.results })
+  } catch (error) {
+    return c.json({ error: 'Failed to fetch admins' }, 500)
   }
 })
 
