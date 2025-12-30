@@ -612,7 +612,7 @@ app.post('/api/admin/daily-topic', async (c) => {
 // Get all users (admin only)
 app.get('/api/admin/users', async (c) => {
   try {
-    const users = await c.env.DB.prepare('SELECT id, email, full_name, faculty, course, is_banned FROM users ORDER BY created_at DESC').all()
+    const users = await c.env.DB.prepare('SELECT id, email, phone, full_name, faculty, course, is_banned FROM users ORDER BY created_at DESC').all()
     return c.json({ users: users.results })
   } catch (error) {
     return c.json({ error: 'Failed to fetch users' }, 500)

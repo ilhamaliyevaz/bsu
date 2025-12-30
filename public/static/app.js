@@ -4,6 +4,7 @@ let currentView = 'login';
 let selectedFaculty = null;
 let selectedPrivateChat = null;
 let messagePolling = null;
+let currentInputValue = ''; // Store input value during refresh
 
 // ==================== API CALLS ====================
 
@@ -342,6 +343,7 @@ async function showFacultyList() {
 
 async function openFacultyChat(facultyId, facultyName) {
     selectedFaculty = { id: facultyId, name: facultyName };
+    selectedPrivateChat = null;
     await renderFacultyChat();
     startMessagePolling();
 }
@@ -351,6 +353,13 @@ async function renderFacultyChat() {
     const topicData = await apiCall('/api/daily-topic');
     
     const app = document.getElementById('app');
+    
+    // Save current input value before re-rendering
+    const existingInput = document.getElementById('message-input');
+    if (existingInput) {
+        currentInputValue = existingInput.value;
+    }
+    
     app.innerHTML = `
         <div class="flex flex-col h-screen bg-gray-50">
             <div class="bg-blue-600 text-white p-4 shadow-lg">
@@ -379,7 +388,7 @@ async function renderFacultyChat() {
             
             <div class="bg-white border-t p-4">
                 <div class="flex space-x-2">
-                    <input type="text" id="message-input" placeholder="Mesaj yazın..." 
+                    <input type="text" id="message-input" value="${currentInputValue}" placeholder="Mesaj yazın..." 
                            class="flex-1 px-4 py-3 rounded-full border border-gray-300 focus:border-blue-500 focus:outline-none"
                            onkeypress="if(event.key === 'Enter') sendFacultyMessage()">
                     <button onclick="sendFacultyMessage()" 
@@ -411,7 +420,7 @@ function renderMessage(message) {
         return `
             <div class="flex items-start space-x-2">
                 ${message.profile_image ? 
-                    `<img src="${message.profile_image}" class="w-8 h-8 rounded-full">` :
+                    `<img src="${message.profile_image}" class="w-8 h-8 rounded-full object-cover">` :
                     `<div class="w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">
                         ${message.full_name.charAt(0)}
                     </div>`
@@ -419,7 +428,7 @@ function renderMessage(message) {
                 <div>
                     <div class="flex items-center space-x-2 mb-1">
                         <p class="text-xs font-semibold text-gray-700">${message.full_name}</p>
-                        <button onclick="openUserActions(${message.sender_id}, '${message.full_name}')" 
+                        <button onclick="openUserActions(${message.sender_id}, '${message.full_name.replace(/'/g, "\\'")}', '${message.profile_image || ''}')" 
                                 class="text-gray-500 hover:text-blue-600">
                             <i class="fas fa-ellipsis-v text-xs"></i>
                         </button>
@@ -445,8 +454,34 @@ async function sendFacultyMessage() {
         message
     });
     
+    currentInputValue = '';
     input.value = '';
-    await renderFacultyChat();
+    await refreshMessages();
+}
+
+// New function: Refresh only messages, not the whole chat
+async function refreshMessages() {
+    if (selectedFaculty) {
+        const messagesData = await apiCall(`/api/faculties/${selectedFaculty.id}/messages?userId=${currentUser.id}`);
+        const chatContainer = document.getElementById('chat-messages');
+        const wasAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+        
+        chatContainer.innerHTML = messagesData.messages.map(m => renderMessage(m)).join('');
+        
+        if (wasAtBottom) {
+            scrollToBottom();
+        }
+    } else if (selectedPrivateChat) {
+        const messagesData = await apiCall(`/api/private-chats?user1=${currentUser.id}&user2=${selectedPrivateChat.id}`);
+        const chatContainer = document.getElementById('chat-messages');
+        const wasAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+        
+        chatContainer.innerHTML = messagesData.messages.map(m => renderMessage(m)).join('');
+        
+        if (wasAtBottom) {
+            scrollToBottom();
+        }
+    }
 }
 
 function scrollToBottom() {
@@ -459,32 +494,41 @@ function scrollToBottom() {
 function startMessagePolling() {
     clearInterval(messagePolling);
     messagePolling = setInterval(async () => {
-        if (selectedFaculty) {
-            const chatContainer = document.getElementById('chat-messages');
-            const wasAtBottom = chatContainer && (chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50);
-            
-            await renderFacultyChat();
-            
-            if (wasAtBottom) {
-                scrollToBottom();
-            }
-        } else if (selectedPrivateChat) {
-            await renderPrivateChat();
+        // Store input value before refresh
+        const input = document.getElementById('message-input');
+        if (input) {
+            currentInputValue = input.value;
+        }
+        
+        await refreshMessages();
+        
+        // Restore input value after refresh
+        const inputAfter = document.getElementById('message-input');
+        if (inputAfter && currentInputValue) {
+            inputAfter.value = currentInputValue;
         }
     }, 2000);
 }
 
 // ==================== USER ACTIONS ====================
 
-function openUserActions(userId, userName) {
+function openUserActions(userId, userName, profileImage) {
     const modal = document.createElement('div');
     modal.id = 'user-actions-modal';
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
     modal.innerHTML = `
         <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 class="text-lg font-bold mb-4">${userName}</h3>
+            <div class="text-center mb-4">
+                ${profileImage ? 
+                    `<img src="${profileImage}" class="w-16 h-16 rounded-full mx-auto mb-2 object-cover">` :
+                    `<div class="w-16 h-16 rounded-full bg-gray-400 flex items-center justify-center text-white text-2xl mx-auto mb-2">
+                        ${userName.charAt(0)}
+                    </div>`
+                }
+                <h3 class="text-lg font-bold">${userName}</h3>
+            </div>
             <div class="space-y-2">
-                <button onclick="openPrivateChat(${userId}, '${userName}')" 
+                <button onclick="openPrivateChat(${userId}, '${userName.replace(/'/g, "\\'")}'); closeModal();" 
                         class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
                     <i class="fas fa-comment mr-2"></i>Şəxsi mesaj
                 </button>
@@ -518,6 +562,7 @@ async function blockUser(userId) {
     });
     alert('İstifadəçi bloklandı!');
     closeModal();
+    await refreshMessages();
 }
 
 async function reportUser(userId) {
@@ -542,6 +587,7 @@ async function reportUser(userId) {
 
 async function showPrivateChats() {
     clearInterval(messagePolling);
+    currentInputValue = '';
     
     const chatsData = await apiCall(`/api/users/${currentUser.id}/chats`);
     
@@ -566,10 +612,10 @@ async function showPrivateChats() {
                 ` : `
                     <div class="space-y-2">
                         ${chatsData.chats.map(chat => `
-                            <div onclick="openPrivateChat(${chat.other_user_id}, '${chat.full_name}')" 
+                            <div onclick="openPrivateChat(${chat.other_user_id}, '${chat.full_name.replace(/'/g, "\\'")}');" 
                                  class="bg-white p-4 rounded-lg shadow hover:shadow-lg transition cursor-pointer flex items-center space-x-3">
                                 ${chat.profile_image ? 
-                                    `<img src="${chat.profile_image}" class="w-12 h-12 rounded-full">` :
+                                    `<img src="${chat.profile_image}" class="w-12 h-12 rounded-full object-cover">` :
                                     `<div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
                                         ${chat.full_name.charAt(0)}
                                     </div>`
@@ -590,6 +636,7 @@ async function showPrivateChats() {
 async function openPrivateChat(userId, userName) {
     selectedPrivateChat = { id: userId, name: userName };
     selectedFaculty = null;
+    currentInputValue = '';
     await renderPrivateChat();
     startMessagePolling();
 }
@@ -598,6 +645,13 @@ async function renderPrivateChat() {
     const messagesData = await apiCall(`/api/private-chats?user1=${currentUser.id}&user2=${selectedPrivateChat.id}`);
     
     const app = document.getElementById('app');
+    
+    // Save current input value before re-rendering
+    const existingInput = document.getElementById('message-input');
+    if (existingInput) {
+        currentInputValue = existingInput.value;
+    }
+    
     app.innerHTML = `
         <div class="flex flex-col h-screen bg-gray-50">
             <div class="bg-blue-600 text-white p-4 shadow-lg">
@@ -615,7 +669,7 @@ async function renderPrivateChat() {
             
             <div class="bg-white border-t p-4">
                 <div class="flex space-x-2">
-                    <input type="text" id="message-input" placeholder="Mesaj yazın..." 
+                    <input type="text" id="message-input" value="${currentInputValue}" placeholder="Mesaj yazın..." 
                            class="flex-1 px-4 py-3 rounded-full border border-gray-300 focus:border-blue-500 focus:outline-none"
                            onkeypress="if(event.key === 'Enter') sendPrivateMessage()">
                     <button onclick="sendPrivateMessage()" 
@@ -642,8 +696,9 @@ async function sendPrivateMessage() {
         message
     });
     
+    currentInputValue = '';
     input.value = '';
-    await renderPrivateChat();
+    await refreshMessages();
 }
 
 // ==================== PROFILE ====================
@@ -664,7 +719,7 @@ async function showProfile() {
             <div class="max-w-md mx-auto p-6">
                 <div class="bg-white rounded-lg shadow-lg p-6 text-center">
                     ${currentUser.profile_image ? 
-                        `<img src="${currentUser.profile_image}" class="w-32 h-32 rounded-full mx-auto mb-4">` :
+                        `<img src="${currentUser.profile_image}" class="w-32 h-32 rounded-full mx-auto mb-4 object-cover">` :
                         `<div class="w-32 h-32 rounded-full bg-blue-500 flex items-center justify-center text-white text-4xl font-bold mx-auto mb-4">
                             ${currentUser.full_name.charAt(0)}
                         </div>`
@@ -676,8 +731,8 @@ async function showProfile() {
                     <p class="text-gray-600">${currentUser.course}-ci kurs</p>
                     
                     <div class="mt-6">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Profil şəkli URL</label>
-                        <input type="text" id="profile_image_url" placeholder="https://example.com/image.jpg" 
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Profil şəkli yüklə</label>
+                        <input type="file" id="profile_image_file" accept="image/*" 
                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:outline-none mb-3">
                         <button onclick="updateProfileImage()" 
                                 class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
@@ -691,20 +746,34 @@ async function showProfile() {
 }
 
 async function updateProfileImage() {
-    const imageUrl = document.getElementById('profile_image_url').value;
+    const fileInput = document.getElementById('profile_image_file');
+    const file = fileInput.files[0];
     
-    if (!imageUrl) {
-        alert('URL daxil edin!');
+    if (!file) {
+        alert('Şəkil seçin!');
         return;
     }
     
-    await apiCall(`/api/users/${currentUser.id}/profile-image`, 'POST', {
-        image_url: imageUrl
-    });
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        alert('Şəkil çox böyükdür! Maksimum 2MB ola bilər.');
+        return;
+    }
     
-    currentUser.profile_image = imageUrl;
-    alert('Profil şəkli yeniləndi!');
-    showProfile();
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64Image = e.target.result;
+        
+        await apiCall(`/api/users/${currentUser.id}/profile-image`, 'POST', {
+            image_url: base64Image
+        });
+        
+        currentUser.profile_image = base64Image;
+        alert('Profil şəkli yeniləndi!');
+        showProfile();
+    };
+    reader.readAsDataURL(file);
 }
 
 // ==================== RULES ====================
@@ -726,7 +795,7 @@ async function showRules() {
             
             <div class="max-w-4xl mx-auto p-6">
                 <div class="bg-white rounded-lg shadow-lg p-6">
-                    <div class="prose max-w-none">
+                    <div class="prose max-w-none whitespace-pre-wrap">
                         ${rulesData.rules || 'Qaydalar hələ əlavə edilməyib.'}
                     </div>
                 </div>
@@ -820,6 +889,7 @@ async function showFlaggedUsers() {
                                     <div>
                                         <h3 class="font-bold text-lg">${user.full_name}</h3>
                                         <p class="text-gray-600">${user.email}</p>
+                                        <p class="text-gray-600">${user.phone}</p>
                                         <p class="text-gray-600">${user.faculty} - ${user.course}-ci kurs</p>
                                         <p class="text-red-600 font-semibold mt-2">
                                             <i class="fas fa-flag mr-2"></i>${user.report_count} şikayət
@@ -1057,12 +1127,13 @@ async function showAllUsers() {
             </div>
             
             <div class="max-w-6xl mx-auto p-6">
-                <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-white rounded-lg shadow-lg overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-100">
                             <tr>
                                 <th class="px-4 py-3 text-left">Ad Soyad</th>
                                 <th class="px-4 py-3 text-left">Email</th>
+                                <th class="px-4 py-3 text-left">Telefon</th>
                                 <th class="px-4 py-3 text-left">Fakültə</th>
                                 <th class="px-4 py-3 text-left">Kurs</th>
                                 <th class="px-4 py-3 text-left">Status</th>
@@ -1073,6 +1144,7 @@ async function showAllUsers() {
                                 <tr class="border-t hover:bg-gray-50">
                                     <td class="px-4 py-3">${user.full_name}</td>
                                     <td class="px-4 py-3">${user.email}</td>
+                                    <td class="px-4 py-3">${user.phone}</td>
                                     <td class="px-4 py-3">${user.faculty}</td>
                                     <td class="px-4 py-3">${user.course}</td>
                                     <td class="px-4 py-3">
@@ -1099,6 +1171,7 @@ function logout() {
     currentView = 'login';
     selectedFaculty = null;
     selectedPrivateChat = null;
+    currentInputValue = '';
     showLogin();
 }
 
