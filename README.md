@@ -5,7 +5,7 @@ BSU Chat - Bakı Dövlət Universitetinin tələbələri üçün xüsusi olaraq 
 
 ## 🌐 URL-lər
 - **Sandbox Development**: https://3000-icbmfvaldk2q9fsmap8tz-cbeee0f9.sandbox.novita.ai
-- **Cloudflare Pages** (deployment sonra əlavə ediləcək)
+- **Cloudflare Pages Project**: https://bsu-chat.pages.dev (deployment üçün aşağıdakı addımları tamamlayın)
 
 ## ✨ Əsas Funksiyalar
 
@@ -130,16 +130,44 @@ npm run clean-port
 ```
 
 ### Cloudflare Pages Deployment
+
+⚠️ **QEYD**: API token icazələri məhdud olduğu üçün aşağıdakı addımları manual tamamlayın:
+
+#### Addım 1: D1 Database Yaradın
+1. [Cloudflare Dashboard](https://dash.cloudflare.com) > Workers & Pages > D1 bölməsinə keçin
+2. "Create" düyməsinə basın
+3. Database adı: `bsu-chat-production`
+4. Yaradılan database-in ID-sini kopyalayın
+
+#### Addım 2: wrangler.jsonc-ni Yeniləyin
+Database ID-ni wrangler.jsonc faylında `local-only` əvəzinə əlavə edin:
+```jsonc
+"d1_databases": [
+  {
+    "binding": "DB",
+    "database_name": "bsu-chat-production",
+    "database_id": "BURAYA-ACTUAL-DATABASE-ID-YAZIN"
+  }
+]
+```
+
+#### Addım 3: Miqrasiyaları Tətbiq Edin
 ```bash
-# Əvvəlcə D1 database yaradın (Cloudflare dashboard-dan)
-# Database ID-ni wrangler.jsonc-yə əlavə edin
-
-# Production miqrasiyaları
 npm run db:migrate:prod
+```
 
-# Deploy
+#### Addım 4: Deploy Edin
+```bash
 npm run deploy
 ```
+
+#### Alternative: Dashboard-dan Deployment
+Əgər CLI ilə problem olarsa:
+1. Cloudflare Dashboard > Workers & Pages > bsu-chat
+2. "Create deployment" düyməsinə basın
+3. `dist` qovluğundakı faylları yükləyin
+4. Deploy edin
+
 
 ## 🛠️ Texnologiyalar
 - **Backend**: Hono.js (Cloudflare Workers)
@@ -159,7 +187,9 @@ npm run deploy
 - ✅ Real-vaxt mesaj yeniləmə (polling)
 - ✅ 72 saatlıq avtomatik mesaj silinməsi
 - ✅ Filtr sistemi
-- ⏳ Cloudflare Pages production deployment (növbəti addım)
+- ✅ Yerli development serveri işləyir
+- ✅ Cloudflare Pages project yaradılıb
+- ⏳ Production D1 database yaradılmalıdır (manual)
 
 ## 📝 Növbəti Addımlar
 1. Cloudflare Pages-ə production deployment
